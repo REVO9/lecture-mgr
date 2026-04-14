@@ -1,0 +1,2 @@
+current_semester = 1
+browser_cmd = "librewolf $URL"

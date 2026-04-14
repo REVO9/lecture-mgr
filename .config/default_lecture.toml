@@ -1,0 +1,6 @@
+# homepage_url =
+# script_url =
+
+compile_notes_cmd = "typst compile $LECTURE_DIR/master.typ"
+compiled_notes_path = "$LECTURE_DIR/master.pdf"
+show_compiled_notes_cmd = "zathura $COMPILED_NOTES_PATH"
