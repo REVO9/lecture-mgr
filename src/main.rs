@@ -85,11 +85,16 @@ impl App {
                 .wrap_err("failed init commit")?;
         }
 
-        let lecture_name = args
-            .lecture
-            .clone()
-            .ok_or_eyre("lecture is currently unknown")
-            .suggestion("use '--lecture' to set the lecture")?;
+        // let lecture_name = args
+        //     .lecture
+        //     .clone()
+        //     .ok_or_eyre("lecture is currently unknown")
+        //     .suggestion("use '--lecture' to set the lecture")?;
+
+        let lecture_name = match args.lecture {
+            Some(name) => name,
+            None => {}
+        };
 
         let mut lecture_dir = PathBuf::from(&semester_dir);
         lecture_dir.push(&lecture_name);
@@ -165,3 +170,5 @@ impl App {
         Ok(())
     }
 }
+
+fn get_lectures(semster_dir: &Path) -> Vec<String> {}
