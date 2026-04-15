@@ -71,15 +71,16 @@ impl App {
         }
 
         let repo = git2::Repository::init(&semester_dir).wrap_err("failed to innit git")?;
-        let no_commits = repo.head()?.peel(git2::ObjectType::Commit).is_err();
+        let no_commits = repo.head().is_err();
 
         if no_commits {
+            println!("no commits yet, committing all files");
             process::Command::new("git")
-                .args(["add", "-A"])
+                .args(["-C", semester_dir.to_str().unwrap(), "add", "-A"])
                 .output()
                 .wrap_err("failed to add files to git")?;
             process::Command::new("git")
-                .args(["commit", "-m", "init"])
+                .args(["-C", semester_dir.to_str().unwrap(), "commit", "-m", "init"])
                 .output()
                 .wrap_err("failed init commit")?;
         }
@@ -93,7 +94,10 @@ impl App {
         let mut lecture_dir = PathBuf::from(&semester_dir);
         lecture_dir.push(&lecture_name);
 
-        eyre::ensure!(lecture_dir.exists(), "lecture '{lecture_name}' does not exist");
+        eyre::ensure!(
+            lecture_dir.exists(),
+            "lecture '{lecture_name}' does not exist"
+        );
         let lecture = Lecture::get(&lecture_dir).wrap_err("failed to get lecture")?;
 
         Ok(Self {
