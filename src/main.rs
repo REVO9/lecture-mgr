@@ -1,55 +1,39 @@
 use std::fs;
-use std::fs::DirEntry;
-use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
-use std::process::Stdio;
 
+use clap::CommandFactory;
 use clap::Parser;
-use clap::Subcommand;
-use clap::builder::TypedValueParser;
-use color_eyre::Section;
+use clap::ValueEnum;
 use color_eyre::eyre;
 use eyre::Context;
 use eyre::OptionExt;
 use eyre::bail;
 use fork::Fork;
 
+use crate::cli::Command;
 use crate::config::Config;
 use crate::lecture::Lecture;
 
+mod cli;
 mod config;
 mod lecture;
 
 type LectureName = String;
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
-    command: Command,
-
-    #[arg(long, short)]
-    lecture: Option<LectureName>,
-}
-
-#[derive(Debug, Subcommand, Clone, Copy)]
-enum Command {
-    /// Commit your changes. These changes will be marked with your current lecture
-    Commit,
-    /// Open this lectures homepage
-    Homepage,
-    /// Open this lectures script
-    Script,
-    /// Compile and show notes
-    Notes,
-}
-
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = Args::parse();
+    let args = cli::Cli::parse();
+    if let Command::Generate{shell} = args.command {
+        let mut cmd = cli::Cli::command();
+        eprintln!("Generating completion file for {shell:?}...");
+        cli::print_completions(shell, &mut cmd);
+
+        return Ok(())
+    }
+
     let config = Config::get()?;
 
     let mut app = App::new(args, config)?;
@@ -59,14 +43,14 @@ fn main() -> eyre::Result<()> {
 }
 
 struct App {
-    args: Args,
+    args: cli::Cli,
     config: Config,
     lecture: Lecture,
     semester_dir: PathBuf,
 }
 
 impl App {
-    fn new(args: Args, config: Config) -> eyre::Result<Self> {
+    fn new(args: cli::Cli, config: Config) -> eyre::Result<Self> {
         let home_dir: PathBuf = std::env::var("HOME").expect("$HOME not set").into();
         let mut semester_dir = home_dir.clone();
         semester_dir.extend(&PathBuf::from(format!(
@@ -131,6 +115,7 @@ impl App {
             Command::Homepage => self.homepage(),
             Command::Script => self.script(),
             Command::Notes => self.notes(),
+            Command::Generate{..} => unreachable!(),
         }
     }
 
@@ -228,14 +213,12 @@ impl App {
         let path = self.compiled_notes_path()?;
 
         if let Ok(Fork::Child) = fork::daemon(false, false) {
-            let mut handle = unsafe {
-                process::Command::new("sh")
-                    .env("COMPILED_NOTES_PATH", path)
-                    .arg("-c")
-                    .arg(self.lecture.show_compiled_notes_cmd.as_str())
-                    .spawn()
-                    .wrap_err(SHOW_ERROR)
-            }?;
+            let mut handle = process::Command::new("sh")
+                .env("COMPILED_NOTES_PATH", path)
+                .arg("-c")
+                .arg(self.lecture.show_compiled_notes_cmd.as_str())
+                .spawn()
+                .wrap_err(SHOW_ERROR)?;
 
             let exit_status = handle.wait().wrap_err(SHOW_ERROR)?;
 

@@ -1,29 +1,45 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    naersk = {
+      url = "github:nix-community/naersk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = {
-    self,
+    flake-utils,
+    naersk,
     nixpkgs,
-  }: let
-    system = "x86_64-linux";
-    pkgs = import nixpkgs {inherit system;};
-  in {
-    packages.${system}.default = pkgs.rustPlatform.buildRustPackage rec {
-      pname = "lecture-mgr";
-      version = "0.2.0";
-      src = ./.;
-      cargoLock = {
-        lockFile = ./Cargo.lock;
-      };
-      nativeBuildInputs = with pkgs; [pkg-config];
-      buildInputs = with pkgs; [openssl];
-    };
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (
+      system: let
+        pkgs = (import nixpkgs) {
+          inherit system;
+        };
 
-    devShells.${system}.default = pkgs.mkShell{
-      nativeBuildInputs = with pkgs; [rustc cargo pkg-config  ];
-      buildInputs = with pkgs; [openssl];
-    };
-  };
+        naersk' = pkgs.callPackage naersk {};
+      in {
+        packages.default = naersk'.buildPackage {
+          src = ./.;
+          nativeBuildInputs = with pkgs; [pkg-config tree];
+          buildInputs = with pkgs; [openssl];
+
+          postInstall = ''
+            mkdir -p $out/share/zsh/site-functions
+            CMP=$out/share/zsh/site-functions/_lecture-mgr
+            echo $CMP
+            $out/bin/lecture-mgr generate zsh > $out/share/zsh/site-functions/_lecture-mgr
+            chmod +x $CMP
+          '';
+        };
+
+        devShell = pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [rustc cargo pkg-config];
+          buildInputs = with pkgs; [openssl];
+        };
+      }
+    );
 }
