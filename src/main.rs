@@ -1,8 +1,10 @@
 use std::fs;
 use std::fs::DirEntry;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::process::Stdio;
 
 use clap::Parser;
 use clap::Subcommand;
@@ -12,6 +14,7 @@ use color_eyre::eyre;
 use eyre::Context;
 use eyre::OptionExt;
 use eyre::bail;
+use fork::Fork;
 
 use crate::config::Config;
 use crate::lecture::Lecture;
@@ -39,6 +42,8 @@ enum Command {
     Homepage,
     /// Open this lectures script
     Script,
+    /// Compile and show notes
+    Notes,
 }
 
 fn main() -> eyre::Result<()> {
@@ -125,6 +130,7 @@ impl App {
             Command::Commit => self.commit(),
             Command::Homepage => self.homepage(),
             Command::Script => self.script(),
+            Command::Notes => self.notes(),
         }
     }
 
@@ -165,8 +171,7 @@ impl App {
     }
 
     fn commit(&self) -> eyre::Result<()> {
-        let mut path = self.semester_dir.clone();
-        path.push(&self.lecture.name);
+        let path = self.lecture_dir();
         let output = process::Command::new("git")
             .args(&[
                 "-C",
@@ -200,6 +205,63 @@ impl App {
         println!("committed '{}'", self.lecture.name);
 
         Ok(())
+    }
+
+    fn notes(&self) -> Result<(), eyre::Error> {
+        const COMPILE_ERROR: &'static str = "failed to compile notes";
+        let mut handle = process::Command::new("sh")
+            .env("LECTURE_DIR", self.lecture_dir())
+            .arg("-c")
+            .arg(self.lecture.compile_notes_cmd.as_str())
+            .spawn()
+            .wrap_err(COMPILE_ERROR)?;
+
+        let exit_status = handle.wait().wrap_err(COMPILE_ERROR)?;
+
+        if !exit_status.success() {
+            bail!(COMPILE_ERROR)
+        }
+
+        println!("compiled '{}'", self.lecture.name);
+
+        const SHOW_ERROR: &'static str = "failed to open notes";
+        let path = self.compiled_notes_path()?;
+
+        if let Ok(Fork::Child) = fork::daemon(false, false) {
+            let mut handle = unsafe {
+                process::Command::new("sh")
+                    .env("COMPILED_NOTES_PATH", path)
+                    .arg("-c")
+                    .arg(self.lecture.show_compiled_notes_cmd.as_str())
+                    .spawn()
+                    .wrap_err(SHOW_ERROR)
+            }?;
+
+            let exit_status = handle.wait().wrap_err(SHOW_ERROR)?;
+
+            if !exit_status.success() {
+                bail!(SHOW_ERROR)
+            }
+        }
+
+        Ok(())
+    }
+
+    fn lecture_dir(&self) -> PathBuf {
+        let mut path = self.semester_dir.clone();
+        path.push(&self.lecture.name);
+        path
+    }
+
+    fn compiled_notes_path(&self) -> eyre::Result<String> {
+        let output = process::Command::new("sh")
+            .env("LECTURE_DIR", self.lecture_dir())
+            .arg("-c")
+            .arg(format!("echo {}", self.lecture.compiled_notes_path.clone()))
+            .output()
+            .unwrap();
+        let path = String::from_utf8(output.stdout)?;
+        Ok(path)
     }
 }
 
