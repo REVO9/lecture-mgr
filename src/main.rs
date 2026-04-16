@@ -6,6 +6,7 @@ use std::process;
 use clap::CommandFactory;
 use clap::Parser;
 use clap::ValueEnum;
+use clap_complete::CompleteEnv;
 use color_eyre::eyre;
 use eyre::Context;
 use eyre::OptionExt;
@@ -25,16 +26,19 @@ type LectureName = String;
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
+    CompleteEnv::with_factory(|| cli::Cli::command().name("lecture-mgr"))  
+        .complete();  
+
     let args = cli::Cli::parse();
-    if let Command::Generate{shell} = args.command {
+    if let Command::Generate { shell } = args.command {
         let mut cmd = cli::Cli::command();
         eprintln!("Generating completion file for {shell:?}...");
         cli::print_completions(shell, &mut cmd);
 
-        return Ok(())
+        return Ok(());
     }
 
-    let config = Config::get()?;
+    let config = Config::get(true)?;
 
     let mut app = App::new(args, config)?;
     app.run()?;
@@ -51,15 +55,7 @@ struct App {
 
 impl App {
     fn new(args: cli::Cli, config: Config) -> eyre::Result<Self> {
-        let home_dir: PathBuf = std::env::var("HOME").expect("$HOME not set").into();
-        let mut semester_dir = home_dir.clone();
-        semester_dir.extend(&PathBuf::from(format!(
-            "Documents/semester-{}",
-            config.current_semester
-        )));
-        if !semester_dir.exists() {
-            bail!("directory {semester_dir:?} does not exist")
-        }
+        let semester_dir = get_semester_dir(&config)?;
 
         let repo = git2::Repository::init(&semester_dir).wrap_err("failed to innit git")?;
         let no_commits = repo.head().is_err();
@@ -115,7 +111,7 @@ impl App {
             Command::Homepage => self.homepage(),
             Command::Script => self.script(),
             Command::Notes => self.notes(),
-            Command::Generate{..} => unreachable!(),
+            Command::Generate { .. } => unreachable!(),
         }
     }
 
@@ -246,6 +242,19 @@ impl App {
         let path = String::from_utf8(output.stdout)?;
         Ok(path)
     }
+}
+
+fn get_semester_dir(config: &Config) -> eyre::Result<PathBuf> {
+    let home_dir: PathBuf = std::env::var("HOME").expect("$HOME not set").into();
+    let mut semester_dir = home_dir.clone();
+    semester_dir.extend(&PathBuf::from(format!(
+        "Documents/semester-{}",
+        config.current_semester
+    )));
+    if !semester_dir.exists() {
+        bail!("directory {semester_dir:?} does not exist")
+    }
+    Ok(semester_dir)
 }
 
 fn get_lectures(semester_dir: &Path) -> eyre::Result<Vec<String>> {

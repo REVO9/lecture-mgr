@@ -30,8 +30,7 @@
           postInstall = ''
             mkdir -p $out/share/zsh/site-functions
             CMP=$out/share/zsh/site-functions/_lecture-mgr
-            echo $CMP
-            $out/bin/lecture-mgr generate zsh > $out/share/zsh/site-functions/_lecture-mgr
+            COMPLETE=zsh $out/bin/lecture-mgr > $out/share/zsh/site-functions/_lecture-mgr
             chmod +x $CMP
           '';
         };

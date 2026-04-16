@@ -14,11 +14,13 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn get() -> eyre::Result<Self> {
+    pub fn get(write_file: bool) -> eyre::Result<Self> {
         let default_config = include_str!("../.config/default_config.toml");
         let config_file_path = config_file_path();
 
-        assert_file_exist(config_file_path.as_ref(), default_config)?;
+        if write_file {
+            assert_file_exist(config_file_path.as_ref(), default_config)?;
+        }
 
         let config = config::Config::builder()
             .add_source(config::File::from_str(
