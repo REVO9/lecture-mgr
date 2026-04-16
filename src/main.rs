@@ -1,3 +1,5 @@
+use std::fs;
+use std::fs::DirEntry;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
@@ -92,8 +94,13 @@ impl App {
         //     .suggestion("use '--lecture' to set the lecture")?;
 
         let lecture_name = match args.lecture {
-            Some(name) => name,
-            None => {}
+            Some(ref name) => name,
+            None => &inquire::Select::new(
+                "select lecture",
+                get_lectures(&semester_dir).wrap_err("failed to get lectures")?,
+            )
+            .prompt()
+            .wrap_err("prompt failed")?,
         };
 
         let mut lecture_dir = PathBuf::from(&semester_dir);
@@ -171,4 +178,22 @@ impl App {
     }
 }
 
-fn get_lectures(semster_dir: &Path) -> Vec<String> {}
+fn get_lectures(semester_dir: &Path) -> eyre::Result<Vec<String>> {
+    let mut vec = Vec::new();
+
+    for entry in fs::read_dir(semester_dir)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let mut lecture_config_path = entry.path();
+        lecture_config_path.push("lecture.toml");
+        if !lecture_config_path.exists() {
+            continue;
+        }
+
+        vec.push(entry.file_name().to_str().ok_or_eyre("failed to get file name")?.to_string())
+    }
+
+    Ok(vec)
+}
