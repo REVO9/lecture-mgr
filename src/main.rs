@@ -141,6 +141,7 @@ impl App {
             .arg(self.config.browser_cmd.as_str())
             .spawn()
             .wrap_err("failed to open script")?;
+        println!("opening script for '{}'", self.lecture.name);
 
         Ok(())
     }
@@ -158,21 +159,45 @@ impl App {
             .arg(self.config.browser_cmd.as_str())
             .spawn()
             .wrap_err("failed to open lecture homepage")?;
+        println!("opening homepage for '{}'", self.lecture.name);
 
         Ok(())
     }
 
     fn commit(&self) -> eyre::Result<()> {
-        process::Command::new("git")
-            .args(&["add", "-C", self.semester_dir.to_str().unwrap(), "-A"])
+        let mut path = self.semester_dir.clone();
+        path.push(&self.lecture.name);
+        let output = process::Command::new("git")
+            .args(&[
+                "-C",
+                self.semester_dir.to_str().unwrap(),
+                "add",
+                path.to_str().unwrap(),
+            ])
             .output()
             .wrap_err("failed to add changes")?;
 
+        if !output.status.success() {
+            return Err(
+                eyre::eyre!("stderr:\n{}", String::from_utf8(output.stderr)?)
+                    .wrap_err("failed to add changes"),
+            );
+        }
+
         let commit_msg = format!("{}", self.lecture.name);
-        process::Command::new("git")
-            .args(&["commit", "-m", &commit_msg])
+        let output = process::Command::new("git")
+            .args(&["-C", path.to_str().unwrap(), "commit", "-m", &commit_msg])
             .output()
             .wrap_err("failed to add changes")?;
+
+        if !output.status.success() {
+            return Err(
+                eyre::eyre!("stderr:\n{}", String::from_utf8(output.stderr)?)
+                    .wrap_err("failed to commit changes"),
+            );
+        }
+
+        println!("committed '{}'", self.lecture.name);
 
         Ok(())
     }
@@ -192,7 +217,13 @@ fn get_lectures(semester_dir: &Path) -> eyre::Result<Vec<String>> {
             continue;
         }
 
-        vec.push(entry.file_name().to_str().ok_or_eyre("failed to get file name")?.to_string())
+        vec.push(
+            entry
+                .file_name()
+                .to_str()
+                .ok_or_eyre("failed to get file name")?
+                .to_string(),
+        )
     }
 
     Ok(vec)
