@@ -194,7 +194,7 @@ impl App {
     fn notes(&self) -> Result<(), eyre::Error> {
         const COMPILE_ERROR: &'static str = "failed to compile notes";
         let mut handle = process::Command::new("sh")
-            .env("lecture.as_ref().unwrap()_DIR", self.lecture_dir())
+            .env("LECTURE_DIR", self.lecture_dir())
             .arg("-c")
             .arg(self.lecture.as_ref().unwrap().compile_notes_cmd.as_str())
             .spawn()
