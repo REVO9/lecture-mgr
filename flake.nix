@@ -29,9 +29,7 @@
 
           postInstall = ''
             mkdir -p $out/share/zsh/site-functions
-            CMP=$out/share/zsh/site-functions/_lecture-mgr
-            COMPLETE=zsh $out/bin/lecture-mgr > $out/share/zsh/site-functions/_lecture-mgr
-            chmod +x $CMP
+            cp completions/lecture-mgr.zsh $out/share/zsh/site-functions/_lecture-mgr
           '';
         };
 
