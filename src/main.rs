@@ -5,7 +5,6 @@ use std::process;
 
 use clap::CommandFactory;
 use clap::Parser;
-use clap::ValueEnum;
 use clap_complete::CompleteEnv;
 use color_eyre::eyre;
 use eyre::Context;
@@ -21,23 +20,12 @@ mod cli;
 mod config;
 mod lecture;
 
-type LectureName = String;
-
 fn main() -> eyre::Result<()> {
+    CompleteEnv::with_factory(|| cli::Cli::command().name("lecture-mgr")).complete();
+
     color_eyre::install()?;
 
-    CompleteEnv::with_factory(|| cli::Cli::command().name("lecture-mgr"))  
-        .complete();  
-
     let args = cli::Cli::parse();
-    if let Command::Generate { shell } = args.command {
-        let mut cmd = cli::Cli::command();
-        eprintln!("Generating completion file for {shell:?}...");
-        cli::print_completions(shell, &mut cmd);
-
-        return Ok(());
-    }
-
     let config = Config::get(true)?;
 
     let mut app = App::new(args, config)?;
@@ -111,7 +99,6 @@ impl App {
             Command::Homepage => self.homepage(),
             Command::Script => self.script(),
             Command::Notes => self.notes(),
-            Command::Generate { .. } => unreachable!(),
         }
     }
 

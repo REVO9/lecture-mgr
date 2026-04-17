@@ -1,9 +1,6 @@
 use clap::Parser;
 use clap::Subcommand;
-use clap_complete::Generator;
 use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
-use clap_complete::generate;
-use config::Config;
 
 use crate::get_lectures;
 use crate::get_semester_dir;
@@ -30,13 +27,10 @@ pub enum Command {
     Script,
     /// Compile and show notes
     Notes,
-
-    /// Outputs the completion file for given shell
-    Generate { shell: clap_complete::Shell },
 }
 
 fn lecture_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
-    let mut completions = vec![];
+    let completions = vec![];
     let Some(current) = current.to_str() else {
         return completions;
     };
@@ -55,13 +49,4 @@ fn lecture_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
         .filter(|lecture_name| lecture_name.starts_with(current))
         .map(|lecture_name| CompletionCandidate::new(lecture_name))
         .collect()
-}
-
-pub fn print_completions<G: Generator>(generator: G, cmd: &mut clap::Command) {
-    generate(
-        generator,
-        cmd,
-        cmd.get_name().to_string(),
-        &mut std::io::stdout(),
-    );
 }
