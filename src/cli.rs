@@ -10,23 +10,32 @@ use crate::get_semester_dir;
 pub struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
-
-    #[arg(long, short, add = ArgValueCompleter::new(lecture_completer))]
-    pub(crate) lecture: Option<LectureName>,
 }
 
 pub type LectureName = String;
 
-#[derive(Debug, Subcommand, Clone, Copy)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum Command {
     /// Commit your changes. These changes will be marked with your current lecture
-    Commit,
+    Commit {
+        #[arg(add = ArgValueCompleter::new(lecture_completer))]
+        lecture: Option<LectureName>,
+    },
     /// Open this lectures homepage
-    Homepage,
+    Homepage {
+        #[arg(add = ArgValueCompleter::new(lecture_completer))]
+        lecture: Option<LectureName>,
+    },
     /// Open this lectures script
-    Script,
-    /// Compile and show notes
-    Notes,
+    Script {
+        #[arg(add = ArgValueCompleter::new(lecture_completer))]
+        lecture: Option<LectureName>,
+    },
+    /// Compile and show notes for this lecture
+    Notes {
+        #[arg(add = ArgValueCompleter::new(lecture_completer))]
+        lecture: Option<LectureName>,
+    },
 }
 
 fn lecture_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
