@@ -82,12 +82,10 @@ impl App {
             Command::Commit { ref lecture }
             | Command::Homepage { ref lecture }
             | Command::Script { ref lecture }
-            | Command::Notes { ref lecture } => {
-                match lecture.clone() {
-                    Some(l) => l,
-                    None => self.prompt_lecutre_name()?,
-                }
-            }
+            | Command::Notes { ref lecture } => match lecture.clone() {
+                Some(l) => l,
+                None => self.prompt_lecutre_name()?,
+            },
         };
 
         let mut lecture_dir = PathBuf::from(&self.semester_dir);
@@ -109,20 +107,16 @@ impl App {
     }
 
     fn script(&self) -> eyre::Result<()> {
-        process::Command::new("sh")
-            .env(
-                "URL",
-                self.lecture
-                    .as_ref()
-                    .unwrap()
-                    .script_url
-                    .clone()
-                    .ok_or_eyre("lecture does not have a script url")?,
-            )
-            .arg("-c")
-            .arg(self.config.browser_cmd.as_str())
-            .spawn()
-            .wrap_err("failed to open script")?;
+        open::that_detached(
+            self.lecture
+                .as_ref()
+                .unwrap()
+                .script_url
+                .clone()
+                .ok_or_eyre("lecture does not have a script url")?,
+        )
+        .wrap_err("failed to open script")?;
+
         println!(
             "opening script for '{}'",
             self.lecture.as_ref().unwrap().name
@@ -132,20 +126,15 @@ impl App {
     }
 
     fn homepage(&self) -> eyre::Result<()> {
-        process::Command::new("sh")
-            .env(
-                "URL",
-                self.lecture
-                    .as_ref()
-                    .unwrap()
-                    .homepage_url
-                    .clone()
-                    .ok_or_eyre("lecture.as_ref().unwrap() does not have a homepage url")?,
-            )
-            .arg("-c")
-            .arg(self.config.browser_cmd.as_str())
-            .spawn()
-            .wrap_err("failed to open lecture.as_ref().unwrap() homepage")?;
+        open::that_detached(
+            self.lecture
+                .as_ref()
+                .unwrap()
+                .homepage_url
+                .clone()
+                .ok_or_eyre("lecture.as_ref().unwrap() does not have a homepage url")?,
+        )
+        .wrap_err("failed to open lecture.as_ref().unwrap() homepage")?;
         println!(
             "opening homepage for '{}'",
             self.lecture.as_ref().unwrap().name

@@ -1,6 +1,6 @@
 [package]
 name = "lecture-mgr"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 
 [dependencies]
@@ -11,5 +11,6 @@ config = "0.15.22"
 fork = "0.7.0"
 git2 = "0.20.4"
 inquire = "0.9.4"
+open = "5.3.3"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"

@@ -10,7 +10,6 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub current_semester: u8,
-    pub browser_cmd: String,
 }
 
 impl Config {
