@@ -36,6 +36,11 @@ pub enum Command {
         #[arg(add = ArgValueCompleter::new(lecture_completer))]
         lecture: Option<LectureName>,
     },
+    /// Show the path of the lecture
+    Path {
+        #[arg(add = ArgValueCompleter::new(lecture_completer))]
+        lecture: Option<LectureName>,
+    },
 }
 
 fn lecture_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {

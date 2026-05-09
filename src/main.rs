@@ -82,7 +82,8 @@ impl App {
             Command::Commit { ref lecture }
             | Command::Homepage { ref lecture }
             | Command::Script { ref lecture }
-            | Command::Notes { ref lecture } => match lecture.clone() {
+            | Command::Notes { ref lecture }
+            | Command::Path { ref lecture } => match lecture.clone() {
                 Some(l) => l,
                 None => self.prompt_lecutre_name()?,
             },
@@ -103,6 +104,15 @@ impl App {
             Command::Homepage { .. } => self.homepage(),
             Command::Script { .. } => self.script(),
             Command::Notes { .. } => self.notes(),
+            Command::Path { .. } => {
+                println!(
+                    "{}",
+                    self.lecture_dir()
+                        .to_str()
+                        .expect("path is not valid Unicode")
+                );
+                Ok(())
+            }
         }
     }
 
