@@ -1,4 +1,3 @@
-use core::panic;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -38,7 +37,6 @@ fn main() -> eyre::Result<()> {
 struct App {
     args: cli::Cli,
     config: Config,
-    lecture: Option<Lecture>,
     semester_dir: PathBuf,
     repo: git2::Repository,
 }
@@ -46,14 +44,13 @@ struct App {
 impl App {
     fn new(args: cli::Cli, config: Config) -> eyre::Result<Self> {
         let semester_dir = get_semester_dir(&config)?;
-        let repo = git2::Repository::init(&semester_dir).wrap_err("failed to innit git")?;
+        let repo = git2::Repository::init(&config.folder).wrap_err("failed to innit git")?;
 
         Ok(Self {
             args: args,
             config: config,
             repo,
             semester_dir: semester_dir,
-            lecture: None,
         })
     }
 
@@ -63,13 +60,13 @@ impl App {
         if no_commits {
             println!("no commits yet, committing all files");
             process::Command::new("git")
-                .args(["-C", self.semester_dir.to_str().unwrap(), "add", "-A"])
+                .args(["-C", self.config.folder.to_str().unwrap(), "add", "-A"])
                 .output()
                 .wrap_err("failed to add files to git")?;
             process::Command::new("git")
                 .args([
                     "-C",
-                    self.semester_dir.to_str().unwrap(),
+                    self.config.folder.to_str().unwrap(),
                     "commit",
                     "-m",
                     "init",
@@ -77,27 +74,6 @@ impl App {
                 .output()
                 .wrap_err("failed init commit")?;
         }
-
-        let lecture_name = match self.args.command {
-            Command::Commit { ref lecture }
-            | Command::Homepage { ref lecture }
-            | Command::Script { ref lecture }
-            | Command::Notes { ref lecture }
-            | Command::Path { ref lecture } => match lecture.clone() {
-                Some(l) => l,
-                None => self.prompt_lecutre_name()?,
-            },
-        };
-
-        let mut lecture_dir = PathBuf::from(&self.semester_dir);
-        lecture_dir.push(&lecture_name);
-
-        eyre::ensure!(
-            lecture_dir.exists(),
-            "lecture '{lecture_name}' does not exist"
-        );
-        let lecture = Lecture::get(&lecture_dir).wrap_err("failed to get lecture")?;
-        self.lecture = Some(lecture);
 
         match self.args.command {
             Command::Commit { .. } => self.commit(),
@@ -107,58 +83,87 @@ impl App {
             Command::Path { .. } => {
                 println!(
                     "{}",
-                    self.lecture_dir()
+                    self.lecture_dir()?
                         .to_str()
                         .expect("path is not valid Unicode")
                 );
                 Ok(())
             }
+            Command::Lectures => {
+                let lectures = get_lectures(&self.semester_dir)?;
+                let string = lectures.join("\n");
+                println!("{}", string);
+                Ok(())
+            }
+            Command::Init { ref lecture } => {
+                let mut lecture_dir = self.semester_dir.clone();
+                lecture_dir.push(lecture);
+                fs::create_dir(&lecture_dir)?;
+                let lecture = lecture::Lecture::get(&lecture_dir)?;
+                println!("created lecture {:?} at {:?}", lecture.name, lecture_dir);
+                Ok(())
+            }
         }
     }
 
+    fn get_lecture(&self) -> Result<Lecture, eyre::Error> {
+        let lecture_name = match self.args.command {
+            Command::Commit { ref lecture }
+            | Command::Homepage { ref lecture }
+            | Command::Script { ref lecture }
+            | Command::Notes { ref lecture }
+            | Command::Path { ref lecture } => match lecture.clone() {
+                Some(l) => l,
+                None => self.prompt_lecutre_name()?,
+            },
+            _ => self.prompt_lecutre_name()?,
+        };
+        let mut lecture_dir = PathBuf::from(&self.semester_dir);
+        lecture_dir.push(&lecture_name);
+        eyre::ensure!(
+            lecture_dir.exists(),
+            "lecture '{lecture_name}' does not exist"
+        );
+        let lecture = Lecture::get(&lecture_dir).wrap_err("failed to get lecture")?;
+        Ok(lecture)
+    }
+
     fn script(&self) -> eyre::Result<()> {
+        let lecture = self.get_lecture()?;
         open::that_detached(
-            self.lecture
-                .as_ref()
-                .unwrap()
+            lecture
                 .script_url
                 .clone()
                 .ok_or_eyre("lecture does not have a script url")?,
         )
         .wrap_err("failed to open script")?;
 
-        println!(
-            "opening script for '{}'",
-            self.lecture.as_ref().unwrap().name
-        );
+        println!("opening script for '{}'", lecture.name);
 
         Ok(())
     }
 
     fn homepage(&self) -> eyre::Result<()> {
+        let lecture = self.get_lecture()?;
         open::that_detached(
-            self.lecture
-                .as_ref()
-                .unwrap()
+            lecture
                 .homepage_url
                 .clone()
                 .ok_or_eyre("lecture.as_ref().unwrap() does not have a homepage url")?,
         )
         .wrap_err("failed to open lecture.as_ref().unwrap() homepage")?;
-        println!(
-            "opening homepage for '{}'",
-            self.lecture.as_ref().unwrap().name
-        );
+        println!("opening homepage for '{}'", lecture.name);
 
         Ok(())
     }
 
     fn commit(&self) -> eyre::Result<()> {
-        let path = self.lecture_dir();
+        let lecture = self.get_lecture()?;
+        let path = self.lecture_dir()?;
         let output = process::Command::new("git")
             .args(&[
                 "-C",
-                self.semester_dir.to_str().unwrap(),
+                self.config.folder.to_str().unwrap(),
                 "add",
                 path.to_str().unwrap(),
             ])
@@ -172,9 +177,18 @@ impl App {
             );
         }
 
-        let commit_msg = format!("{}", self.lecture.as_ref().unwrap().name);
+        let commit_msg = format!(
+            "semester-{}: ,{}",
+            self.config.current_semester, lecture.name,
+        );
         let output = process::Command::new("git")
-            .args(&["-C", path.to_str().unwrap(), "commit", "-m", &commit_msg])
+            .args(&[
+                "-C",
+                self.config.folder.to_str().unwrap(),
+                "commit",
+                "-m",
+                &commit_msg,
+            ])
             .output()
             .wrap_err("failed to add changes")?;
 
@@ -185,17 +199,18 @@ impl App {
             );
         }
 
-        println!("committed '{}'", self.lecture.as_ref().unwrap().name);
+        println!("committed '{}'", lecture.name);
 
         Ok(())
     }
 
     fn notes(&self) -> Result<(), eyre::Error> {
+        let lecture = self.get_lecture()?;
         const COMPILE_ERROR: &'static str = "failed to compile notes";
         let mut handle = process::Command::new("sh")
-            .env("LECTURE_DIR", self.lecture_dir())
+            .env("LECTURE_DIR", self.lecture_dir()?)
             .arg("-c")
-            .arg(self.lecture.as_ref().unwrap().compile_notes_cmd.as_str())
+            .arg(lecture.compile_notes_cmd.as_str())
             .spawn()
             .wrap_err(COMPILE_ERROR)?;
 
@@ -205,7 +220,7 @@ impl App {
             bail!(COMPILE_ERROR)
         }
 
-        println!("compiled '{}'", self.lecture.as_ref().unwrap().name);
+        println!("compiled '{}'", lecture.name);
 
         const SHOW_ERROR: &'static str = "failed to open notes";
         let path = self.compiled_notes_path()?;
@@ -214,13 +229,7 @@ impl App {
             let mut handle = process::Command::new("sh")
                 .env("COMPILED_NOTES_PATH", path)
                 .arg("-c")
-                .arg(
-                    self.lecture
-                        .as_ref()
-                        .unwrap()
-                        .show_compiled_notes_cmd
-                        .as_str(),
-                )
+                .arg(lecture.show_compiled_notes_cmd.as_str())
                 .spawn()
                 .wrap_err(SHOW_ERROR)?;
 
@@ -234,27 +243,25 @@ impl App {
         Ok(())
     }
 
-    fn lecture_dir(&self) -> PathBuf {
+    fn lecture_dir(&self) -> eyre::Result<PathBuf> {
         let mut path = self.semester_dir.clone();
-        path.push(&self.lecture.as_ref().unwrap().name);
-        path
+        path.push(&self.get_lecture()?.name);
+        Ok(path)
     }
 
     fn compiled_notes_path(&self) -> eyre::Result<String> {
+        let lecture = self.get_lecture()?;
         let output = process::Command::new("sh")
-            .env("LECTURE_DIR", self.lecture_dir())
+            .env("LECTURE_DIR", self.lecture_dir()?)
             .arg("-c")
-            .arg(format!(
-                "echo {}",
-                self.lecture.as_ref().unwrap().compiled_notes_path.clone()
-            ))
+            .arg(format!("echo {}", lecture.compiled_notes_path.clone()))
             .output()
             .unwrap();
         let path = String::from_utf8(output.stdout)?;
         Ok(path)
     }
 
-    fn prompt_lecutre_name(&mut self) -> eyre::Result<String> {
+    fn prompt_lecutre_name(&self) -> eyre::Result<String> {
         let lecture_name = inquire::Select::new(
             "select lecture",
             get_lectures(&self.semester_dir).wrap_err("failed to get lectures")?,
@@ -267,16 +274,15 @@ impl App {
 }
 
 fn get_semester_dir(config: &Config) -> eyre::Result<PathBuf> {
-    let home_dir: PathBuf = std::env::var("HOME").expect("$HOME not set").into();
-    let mut semester_dir = home_dir.clone();
-    semester_dir.extend(&PathBuf::from(format!(
-        "Documents/semester-{}",
+    let mut dir = config.folder.clone();
+    dir.extend(&PathBuf::from(format!(
+        "semester-{}",
         config.current_semester
     )));
-    if !semester_dir.exists() {
-        bail!("directory {semester_dir:?} does not exist")
+    if !dir.exists() {
+        bail!("directory {dir:?} does not exist")
     }
-    Ok(semester_dir)
+    Ok(dir)
 }
 
 fn get_lectures(semester_dir: &Path) -> eyre::Result<Vec<String>> {

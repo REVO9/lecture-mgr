@@ -16,6 +16,10 @@ pub type LectureName = String;
 
 #[derive(Debug, Subcommand, Clone)]
 pub enum Command {
+    /// List all lectures in the current semester
+    Lectures,
+    /// Initialize a new lecture
+    Init { lecture: LectureName },
     /// Commit your changes. These changes will be marked with your current lecture
     Commit {
         #[arg(add = ArgValueCompleter::new(lecture_completer))]
