@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
@@ -99,7 +100,12 @@ impl App {
             Command::Init { ref lecture } => {
                 let mut lecture_dir = self.semester_dir.clone();
                 lecture_dir.push(lecture);
-                fs::create_dir(&lecture_dir)?;
+                if let Err(err) = fs::create_dir(&lecture_dir) {
+                    match err.kind() {
+                        io::ErrorKind::AlreadyExists => {}
+                        _ => Err(err)?,
+                    }
+                };
                 let lecture = lecture::Lecture::get(&lecture_dir)?;
                 println!("created lecture {:?} at {:?}", lecture.name, lecture_dir);
                 Ok(())
@@ -179,7 +185,7 @@ impl App {
         }
 
         let commit_msg = format!(
-            "semester-{}: ,{}",
+            "semester-{}: {}",
             self.config.current_semester, lecture.name,
         );
         let output = process::Command::new("git")
