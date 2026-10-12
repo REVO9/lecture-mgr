@@ -26,7 +26,8 @@ fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
     let args = cli::Cli::parse();
-    let config = Config::get(true)?;
+    let mut config = Config::get(true)?;
+    args.semester.inspect(|s| config.current_semester = *s);
 
     let mut app = App::new(args, config)?;
     app.run()?;

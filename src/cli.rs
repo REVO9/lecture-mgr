@@ -10,6 +10,9 @@ use crate::get_semester_dir;
 pub struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
+    /// Set the semester to use
+    #[arg(long, short)]
+    pub(crate) semester: Option<u8>,
 }
 
 pub type LectureName = String;
