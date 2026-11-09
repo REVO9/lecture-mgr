@@ -3,6 +3,7 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::sync::Arc;
 
 use clap::CommandFactory;
 use clap::Parser;
@@ -41,6 +42,7 @@ struct App {
     config: Config,
     semester_dir: PathBuf,
     repo: git2::Repository,
+    lecture: Option<Arc<Lecture>>,
 }
 
 impl App {
@@ -53,6 +55,7 @@ impl App {
             config: config,
             repo,
             semester_dir: semester_dir,
+            lecture: None,
         })
     }
 
@@ -113,7 +116,11 @@ impl App {
         }
     }
 
-    fn get_lecture(&self) -> Result<Lecture, eyre::Error> {
+    fn get_lecture(&mut self) -> Result<Arc<Lecture>, eyre::Error> {
+        if let Some(ref lecture) = self.lecture {
+            return Ok(Arc::clone(lecture));
+        }
+
         let lecture_name = match self.args.command {
             Command::Commit { ref lecture }
             | Command::Homepage { ref lecture }
@@ -132,10 +139,11 @@ impl App {
             "lecture '{lecture_name}' does not exist"
         );
         let lecture = Lecture::get(&lecture_dir).wrap_err("failed to get lecture")?;
-        Ok(lecture)
+        self.lecture = Some(Arc::new(lecture));
+        Ok(Arc::clone(self.lecture.as_ref().unwrap()))
     }
 
-    fn script(&self) -> eyre::Result<()> {
+    fn script(&mut self) -> eyre::Result<()> {
         let lecture = self.get_lecture()?;
         open::that_detached(
             lecture
@@ -150,7 +158,7 @@ impl App {
         Ok(())
     }
 
-    fn homepage(&self) -> eyre::Result<()> {
+    fn homepage(&mut self) -> eyre::Result<()> {
         let lecture = self.get_lecture()?;
         open::that_detached(
             lecture
@@ -164,7 +172,7 @@ impl App {
         Ok(())
     }
 
-    fn commit(&self) -> eyre::Result<()> {
+    fn commit(&mut self) -> eyre::Result<()> {
         let lecture = self.get_lecture()?;
         let path = self.lecture_dir()?;
         let output = process::Command::new("git")
@@ -211,7 +219,7 @@ impl App {
         Ok(())
     }
 
-    fn notes(&self) -> Result<(), eyre::Error> {
+    fn notes(&mut self) -> Result<(), eyre::Error> {
         let lecture = self.get_lecture()?;
         const COMPILE_ERROR: &'static str = "failed to compile notes";
         let mut handle = process::Command::new("sh")
@@ -250,13 +258,13 @@ impl App {
         Ok(())
     }
 
-    fn lecture_dir(&self) -> eyre::Result<PathBuf> {
+    fn lecture_dir(&mut self) -> eyre::Result<PathBuf> {
         let mut path = self.semester_dir.clone();
         path.push(&self.get_lecture()?.name);
         Ok(path)
     }
 
-    fn compiled_notes_path(&self) -> eyre::Result<String> {
+    fn compiled_notes_path(&mut self) -> eyre::Result<String> {
         let lecture = self.get_lecture()?;
         let output = process::Command::new("sh")
             .env("LECTURE_DIR", self.lecture_dir()?)
